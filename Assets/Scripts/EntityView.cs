@@ -4,8 +4,10 @@ using UnityEngine;
 
 public class EntityView : MonoBehaviour
 {
-    public EntityType type;
-    public Renderer renderer;
+    public Entity entity;
+    public SpriteRenderer renderer;
+
+    public int x, y;
 
     public void Activate() {
         renderer.enabled = true;

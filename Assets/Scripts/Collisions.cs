@@ -2,118 +2,133 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using System.Linq;
+using Assets.Scripts.Logic.Math;
 using Logic;
 using UnityEngine;
 
-public class Collider
+namespace Physics
 {
-    public FixedPointVector3 position;
-
-    public int layer = 0; //number up to 32
-    public BitVector32 collidesWithLayers;
-
-    public Action<Collider> onCollision = null;
-
-    public Collider() { }
-    public Collider(FixedPointVector3 pos) { position = pos; }
-
-    public bool CanCollideWith(Collider other)
+    public class CollisionProcessor
     {
-        return collidesWithLayers[other.layer];
-    }
-}
+        List<Body> bodies = new List<Body>();
 
-public class CircleCollider : Collider
-{
-    public FixedPoint radius;
+        public int gridSize = 8;
+        public int gridCapacity = 8;
+        private FixedPoint gridCellWidth, gridCellHeight;
 
-    public CircleCollider() { }
-    public CircleCollider(FixedPointVector3 pos) : base(pos) { }
-}
+        Body[][][] colliderGrid;
 
-public class OrientedBoxCollider : Collider
-{
-    public FixedPoint angle;
-    public FixedPoint width, height;
-
-    public OrientedBoxCollider() { }
-
-    public OrientedBoxCollider(FixedPointVector3 pos, FixedPoint w, FixedPoint h, FixedPoint a) : base(pos)
-    {
-        angle = a;
-        width = w;
-        height = h;
-    }
-}
-
-public class CollisionProcessor
-{
-    List<CircleCollider> circleColliders = new List<CircleCollider>();
-    List<OrientedBoxCollider> boxColliders = new List<OrientedBoxCollider>();
-
-    public void AddCollider(Collider c)
-    {
-        if(c is CircleCollider)
-            circleColliders.Add(c as CircleCollider);
-        else
-            boxColliders.Add(c as OrientedBoxCollider);
-    }
-
-    public void RemoveCollider<T>(T c) where T : Collider
-    {
-        if (c is CircleCollider)
-            circleColliders.Remove(c as CircleCollider);
-        else
-            boxColliders.Remove(c as OrientedBoxCollider);
-    }
-
-    public void Step()
-    {
-        //circle vs circle
-        for (int i = 0; i < circleColliders.Count; i++) {
-            for (int j = i + 1; j < circleColliders.Count; j++)
-            {
-                var first = circleColliders[i];
-                var second = circleColliders[j];
-
-                if (first.CanCollideWith(second))
-                {
-                    if (CheckCollision(first, second))
-                    {
-                        first.onCollision(second);
-                        second.onCollision(first);
-                    }
-                }
-            }
-        }
-
-        //box vs circle
-        for (int i = 0; i < boxColliders.Count; i++)
+        public CollisionProcessor(int _gridSize, FixedPoint w, FixedPoint h)
         {
-            for (int j = i + 1; j < circleColliders.Count; j++)
-            {
-                var first = boxColliders[i];
-                var second = circleColliders[j];
+            gridSize = _gridSize;
+            gridCellWidth  = w / (FixedPoint)_gridSize;
+            gridCellHeight = h / (FixedPoint)_gridSize;
 
-                if (first.CanCollideWith(second))
+            colliderGrid = new Body[gridSize][][];
+
+            for (int i = 0; i < _gridSize; i++)
+            {
+                colliderGrid[i] = new Body[gridSize][];
+
+                for (int j = 0; j < _gridSize; j++)
                 {
-                    if (CheckCollision(first, second))
-                    {
-                        first.onCollision(second);
-                        second.onCollision(first);
-                    }
+                    colliderGrid[i][j] = new Body[gridCapacity];
                 }
             }
         }
-    }
 
-    public bool CheckCollision(CircleCollider first, CircleCollider second)
-    {
-        return (first.position - second.position).Abs.Magnitude <= first.radius + second.radius;
-    }
+        public void AddCollider(Body c)
+        {
+            bodies.Add(c as CircleBody);
+        }
 
-    public bool CheckCollision(OrientedBoxCollider first, CircleCollider second)
-    {
-        return false;
+        public void RemoveCollider<T>(T c) where T : Body
+        {
+            bodies.Remove(c as CircleBody);
+        }
+
+        public void Step()
+        {
+            //clean grid
+            for (int x = 0; x < gridSize; x++)
+            {
+                for (int y = 0; y < gridSize; y++)
+                {
+                    colliderGrid[x][y].Clear();
+                }
+            }
+
+            //place objects into 2D grid
+            foreach (var body in bodies)
+            {
+                int tileX = Mathfp.Floor(body.position.X / gridCellWidth);
+                int tileY = Mathfp.Floor(body.position.Y / gridCellHeight);
+
+                body.occupiedTile = new Point(tileX, tileY);
+
+                //put into grid including adjacent tiles
+                for (int x = tileX - 1; x <= tileX + 1; x++)
+                {
+                    for (int y = tileY - 1; y <= tileY + 1; y++)
+                    {
+                        if (x >= 0 && x < gridSize && y >= 0 && y < gridSize)
+                            colliderGrid[x][y].PutIntoFreeSlot(body);
+                    }
+                }
+
+            }
+
+            //check collisions
+            foreach (var c in bodies) {
+                c.MakeContactsDirty();
+            }
+
+            foreach (var body in bodies)
+            {
+                int x = body.occupiedTile.x;
+                int y = body.occupiedTile.y;
+
+                //ignore objects outside grid
+                if (!(x >= 0 && x < gridSize && y > 0 && y < gridSize))
+                    continue;
+
+                foreach (var other in colliderGrid[x][y].Where(o => o != null))
+                {
+                    if (other != body)
+                    {
+                        if (body.CanCollideWith(other))
+                        {
+                            if (CheckCollision(body, other))
+                            {
+                                body.AddContact(other);
+                                other.AddContact(body);
+                            }
+                        }
+                    }
+                }
+            }
+
+            foreach (var c in bodies)
+            {
+                c.CleanupContacts();
+            }
+        }
+
+        public bool CheckCollision(Body first, Body second)
+        {
+            if (first is CircleBody && second is CircleBody)
+                return Circle2Circle((CircleBody)first, (CircleBody)second);
+
+
+            return false;
+        }
+
+        private bool Circle2Circle(CircleBody first, CircleBody second)
+        {
+            FixedPoint rSum = (first.radius + second.radius);
+            //lets imagine lib provides FixedPointVector2 and we don't do extra muls, but it looks better
+            return (first.position - second.position).Magnitude <= rSum * rSum;
+        }
     }
 }
