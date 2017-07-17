@@ -2,11 +2,12 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using Logic;
 using UnityEngine;
 
 //i considered just low-level rendering with just filling vbo/instancing
 //but it would be too simplistic and unappliable to complex gameobjects
-public class EntityViewSpawner : MonoBehaviour {
+public class EntityRenderer : MonoBehaviour {
     private List<EntityView> activeViews = new List<EntityView>();
 
     //pool to reuse gameobjects
@@ -32,25 +33,27 @@ public class EntityViewSpawner : MonoBehaviour {
         }
     }
 
-    public EntityView Create(Entity entity)
+    public EntityView Show(Entity entity)
     {
-        var found = recycledViews.FirstOrDefault(v => v.entity.type == entity.type);
+        var view = recycledViews.FirstOrDefault(v => v.entity.type == entity.type);
 
-        if (found != null) {
-            recycledViews.Remove(found);
+        if (view != null) {
+            recycledViews.Remove(view);
         }
         else {
-            found = Instantiate(prefabs[entity.type]);
-            found.transform.parent = this.transform;
+            view = Instantiate(prefabs[entity.type]);
+            view.transform.parent = this.transform;
         }
 
-        found.entity = entity;
-        found.transform.localScale = new Vector3(entity.scale, entity.scale, 0);
+        view.entity = entity;
+        view.transform.localScale = new Vector3(entity.scale, entity.scale, 0);
 
-        activeViews.Add(found);
-        found.Activate();
+        activeViews.Add(view);
+        view.Activate();
 
-        return found;
+        entity.deathEvent.Listen(() => RecycleDelayed(view, 3));
+
+        return view;
     }
 
     public void Recycle(EntityView view)
@@ -62,12 +65,12 @@ public class EntityViewSpawner : MonoBehaviour {
         recycledViews.Add(view);
     }
 
-    public void RecycleDelayed(EntityView view, float delay = 1)
+    public void RecycleDelayed(EntityView view, FixedPoint delay)
     {
         StartCoroutine(DeathCoroutine(view, delay));
     }
 
-    private IEnumerator DeathCoroutine(EntityView view, float delay)
+    private IEnumerator DeathCoroutine(EntityView view, FixedPoint delay)
     {
         yield return new WaitForSeconds(1.0f);
         Recycle(view);

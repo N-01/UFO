@@ -48,8 +48,8 @@ namespace Physics
         public bool AddContact(Body other)
         {
             var existing = contacts.FirstOrDefault(c => c.other == other);
-            if (existing != null)
-            {
+
+            if (existing != null) {
                 existing.confirmed = true;
                 return false;
             }
@@ -61,8 +61,7 @@ namespace Physics
 
         public void MakeContactsDirty()
         {
-            foreach (var c in contacts)
-            {
+            foreach (var c in contacts) {
                 c.confirmed = false;
             }
         }
@@ -79,7 +78,7 @@ namespace Physics
 
         public bool CanCollideWith(Body other)
         {
-            return collidesWithLayers[other.layer];
+            return collidesWithLayers[1 << other.layer];
         }
     }
 

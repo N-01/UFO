@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using Logic;
 using UnityEngine;
 
 namespace Utils
@@ -108,7 +109,7 @@ namespace Utils
         }
     }
 
-    public static class Math {
+    public static class MathExt {
         public static T Clamp<T>(this T val, T min, T max) where T : IComparable<T>
         {
             if (val.CompareTo(min) < 0) return min;
@@ -121,6 +122,16 @@ namespace Utils
 
 public static class Extensions
 {
+    public static FixedPoint Range(FixedPoint from, FixedPoint to)
+    {
+        return (FixedPoint)UnityEngine.Random.Range(from, to);
+    }
+
+    public static FixedPoint Range(float from, float to)
+    {
+        return (FixedPoint)UnityEngine.Random.Range(from, to);
+    }
+
     public static int IndexOf<T>(this T[] array, T value) where T : class
     {
         for (int i = 0; i < array.Length; i++)

@@ -40,15 +40,15 @@ namespace Physics
 
         public void AddCollider(Body c)
         {
-            bodies.Add(c as CircleBody);
+            bodies.Add(c);
         }
 
         public void RemoveCollider<T>(T c) where T : Body
         {
-            bodies.Remove(c as CircleBody);
+            bodies.Remove(c);
         }
 
-        public void Step()
+        public void UpdateCollisions()
         {
             //clean grid
             for (int x = 0; x < gridSize; x++)
