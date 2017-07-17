@@ -11,7 +11,7 @@ namespace Physics
 {
     public class CollisionProcessor
     {
-        List<Body> bodies = new List<Body>();
+        List<Body> bodies = new List<Body>(32);
 
         public int gridSize = 8;
         public int gridCapacity = 8;
@@ -67,7 +67,7 @@ namespace Physics
 
                 body.occupiedTile = new Point(tileX, tileY);
 
-                //put into grid including adjacent tiles
+                //inject into grid, including adjacent tiles
                 for (int x = tileX - 1; x <= tileX + 1; x++)
                 {
                     for (int y = tileY - 1; y <= tileY + 1; y++)
