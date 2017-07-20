@@ -6,6 +6,7 @@ using System.Linq;
 using Assets.Scripts.Logic.Math;
 using Logic;
 using UnityEngine;
+using Utils;
 
 namespace Physics
 {
@@ -15,13 +16,28 @@ namespace Physics
 
         public int gridSize = 8;
         public int gridCapacity = 8;
+
         private FixedPoint gridCellWidth, gridCellHeight;
+        private FixedPoint sceneWidth, sceneHeight, boundarySize;
 
         Body[][][] colliderGrid;
 
-        public CollisionProcessor(int _gridSize, FixedPoint w, FixedPoint h)
+        public List<Connection> contacts = new List<Connection>(32);
+
+        public GameController gameController;
+        public BehaviorController behaviorController;
+
+        public CollisionProcessor(int _gridSize, 
+                                  FixedPoint w, FixedPoint h, FixedPoint bounds,
+                                  BehaviorController bc, GameController gc)
         {
             gridSize = _gridSize;
+
+            sceneWidth = w;
+            sceneHeight = h;
+
+            boundarySize = bounds;
+
             gridCellWidth  = w / (FixedPoint)_gridSize;
             gridCellHeight = h / (FixedPoint)_gridSize;
 
@@ -36,6 +52,9 @@ namespace Physics
                     colliderGrid[i][j] = new Body[gridCapacity];
                 }
             }
+
+            behaviorController = bc;
+            gameController = gc;
         }
 
         public void AddCollider(Body c)
@@ -48,8 +67,29 @@ namespace Physics
             bodies.Remove(c);
         }
 
+        public Connection CreateContact(Body first, Body second)
+        {
+            var existing = contacts.FirstOrDefault(c => c.first == first && c.second == second);
+
+            if (existing != null)
+            {
+                existing.confirmed = true;
+                return null;
+            }
+
+            var contact = new Connection(first, second);
+            contacts.Add(contact);
+            return contact;
+        }
+
         public void UpdateCollisions()
         {
+            //destroy objects otside of bounds
+            bodies.Where(b => (b.position.X < -boundarySize || b.position.X > sceneWidth + boundarySize ||
+                               b.position.Y < -boundarySize || b.position.Y > sceneHeight + boundarySize) && b.owner is Placeholder == false)
+                              .ToList()
+                              .ForEach(val => gameController.DestroyEntity(val.owner));
+
             //clean grid
             for (int x = 0; x < gridSize; x++)
             {
@@ -80,8 +120,8 @@ namespace Physics
             }
 
             //check collisions
-            foreach (var c in bodies) {
-                c.MakeContactsDirty();
+            foreach (var c in contacts) {
+                c.confirmed = false;
             }
 
             foreach (var body in bodies)
@@ -99,36 +139,57 @@ namespace Physics
                     {
                         if (body.CanCollideWith(other))
                         {
-                            if (CheckCollision(body, other))
-                            {
-                                body.AddContact(other);
-                                other.AddContact(body);
+                            if (CheckCollision(body, other)) {
+                                behaviorController.SendCollisionEnter(CreateContact(body, other));
                             }
                         }
                     }
                 }
             }
 
-            foreach (var c in bodies)
-            {
-                c.CleanupContacts();
+            foreach (var c in contacts.Where(c => !c.confirmed)) {
+                behaviorController.SendCollisionExit(c);
             }
+            contacts.RemoveAll(c => !c.confirmed);
         }
 
         public bool CheckCollision(Body first, Body second)
         {
             if (first is CircleBody && second is CircleBody)
-                return Circle2Circle((CircleBody)first, (CircleBody)second);
+                return CircleVsCircle((CircleBody)first, (CircleBody)second);
+            if (first is OrientedBoxBody && second is CircleBody)
+                return OOBvsCircle((OrientedBoxBody)first, (CircleBody)second);
+            if (first is CircleBody && second is OrientedBoxBody)
+                return OOBvsCircle((OrientedBoxBody)second, (CircleBody)first);
 
 
             return false;
         }
 
-        private bool Circle2Circle(CircleBody first, CircleBody second)
+        //lets imagine lib provides FixedPointVector2
+        private bool CircleVsCircle(CircleBody first, CircleBody second)
         {
             FixedPoint rSum = (first.radius + second.radius);
-            //lets imagine lib provides FixedPointVector2 and we don't do extra muls, but it looks better
             return (first.position - second.position).Magnitude <= rSum * rSum;
+        }
+
+        private bool OOBvsCircle(OrientedBoxBody box, CircleBody circle)
+        {
+            FixedPointVector3 rotated = MathExt.RotatePoint(circle.position, box.position, 0);
+            FixedPointVector3 relative = rotated - box.position;
+
+            FixedPoint halfW = box.width * FixedPoint.Float05;
+            FixedPoint halfH = box.height * FixedPoint.Float05;
+            FixedPointVector3 clamped = new FixedPointVector3(
+                                        relative.X.Clamp(-halfW, halfW),
+                                        relative.Y.Clamp(-halfH, halfH),
+                                        0);
+
+            //rotate back
+            FixedPointVector3 transformedBack = MathExt.RotatePoint(clamped, box.position, 0);
+            transformedBack += box.position;
+
+            return (circle.position - transformedBack).Magnitude <= circle.radius;
         }
     }
 }

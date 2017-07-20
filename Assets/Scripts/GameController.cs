@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Logic;
@@ -7,11 +8,13 @@ using Physics;
 using UnityEngine;
 
 using FPRandom = Extensions;
+using Random = UnityEngine.Random;
 
 public class GameController : MonoBehaviour
 {
 	public EntityRenderer viewController;
-	public CollisionProcessor collisionProcessor;
+	public CollisionProcessor collisionController;
+	public BehaviorController behaviorController;
 
 	public FixedPoint boundarySize = 2;
 
@@ -19,15 +22,22 @@ public class GameController : MonoBehaviour
 	public List<Entity> entities = new List<Entity>();
 
 	public int maxAsteroids = 10;
-	public FixedPoint asteroidSpawnInterval = (FixedPoint)0.5f;
+	public FixedPoint asteroidSpawnInterval = 1;
 
-	void Start ()
+	private Placeholder mouseTarget;
+
+	public void Start()
 	{
-		collisionProcessor = new CollisionProcessor(8, sceneWidth, sceneHeight);
+		behaviorController = new BehaviorController(this);
+		collisionController = new CollisionProcessor(8, sceneWidth, sceneHeight, boundarySize, behaviorController, this);
 
-		for (int i = 0; i < 10; i++) {
-			SpawnUfo();
-		}
+		Init();
+	}
+
+	void Init ()
+	{
+		mouseTarget = new Placeholder(2);
+		RegisterEntity(mouseTarget);
 	}
 
 	private FixedPoint timeSinceAsteroidSpawned = 0;
@@ -35,27 +45,52 @@ public class GameController : MonoBehaviour
 	void Update () {
 		FixedPoint dt = (FixedPoint)Time.deltaTime;
 
-		foreach (var e in entities)
-		{
-			if (e.position.X < -boundarySize || e.position.X > sceneWidth + boundarySize ||
-			   e.position.Y < -boundarySize || e.position.Y > sceneHeight + boundarySize)
-				e.deathEvent.Send();
-		}
+		var v3 = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+		mouseTarget.position = new FixedPointVector3(v3.x, v3.y, 0);
 
-		if (timeSinceAsteroidSpawned >= asteroidSpawnInterval && entities.Count(e => e.type == EntityType.Asteroid) < 10) {
+		entities.Where(e => e.health < 1).ToList().ForEach(DestroyEntity);
+
+		if (timeSinceAsteroidSpawned >= asteroidSpawnInterval && entities.Count(e => e.type == EntityType.Asteroid) < 10)
+		{
 			SpawnAsteroid();
 			timeSinceAsteroidSpawned = 0;
 		}
 
-		foreach (var entity in entities) {
-			entity.DoLogics(dt);
-		}
-
-		collisionProcessor.UpdateCollisions();
-		viewController.UpdatePositions();
-
 		timeSinceAsteroidSpawned += dt;
 
+		behaviorController.UpdateBehavior(dt);
+		collisionController.UpdateCollisions();
+
+		viewController.UpdateViews();
+
+		if (Input.GetMouseButtonUp(0) && mouseTarget.behavior.IsColliding() == false)
+		{
+			SpawnUfo(mouseTarget.position);
+		}
+
+	}
+
+	public Entity FindClosestEntity(Entity target, Func<Entity, float, bool> predicate)
+	{
+		var minDistance = (FixedPoint)999;
+		Entity closestEntity = null;
+
+		foreach (var other in entities)
+		{
+			if (other == target)
+				continue;
+
+			var distance = (target.position - other.position).Magnitude;
+
+			if (distance < minDistance && predicate(other, distance))
+			{
+				minDistance = distance;
+				closestEntity = other;
+			}
+
+		}
+
+		return closestEntity;
 	}
 
 	public void SpawnAsteroid()
@@ -78,7 +113,7 @@ public class GameController : MonoBehaviour
 		}
 
 		var scale = FPRandom.Range(1.0f, 1.5f);
-		var asteroid = new Asteroid(position, scale, this);
+		var asteroid = new Asteroid(position, scale);
 
 		asteroid.direction = (new FixedPointVector3(sceneWidth / 2, sceneHeight / 2, 0) - position).Normalized;
 		asteroid.speed = sceneWidth / FPRandom.Range(5, 10);
@@ -86,25 +121,36 @@ public class GameController : MonoBehaviour
 		RegisterEntity(asteroid);
 	}
 
-	public void SpawnUfo()
+	public void SpawnUfo(FixedPointVector3 pos)
 	{
-		var position = new FixedPointVector3(FPRandom.Range(0f, sceneWidth), FPRandom.Range(0.0f, sceneHeight), 0);
-		var ufo = new Ufo(position, (FixedPoint)0.5f, this);
+		RegisterEntity(new Ufo(pos, 1));
+	}
 
-		RegisterEntity(ufo);
+	public void SpawnBlast(FixedPointVector3 pos, FixedPointVector3 dir, Entity source)
+	{
+		RegisterEntity(new Blast(pos, dir, source));
 	}
 
 	private void RegisterEntity(Entity e)
 	{
-		e.deathEvent.Listen(() =>
-		{
-			collisionProcessor.RemoveCollider(e.body);
-			entities.Remove(e);
-		});
-
-		collisionProcessor.AddCollider(e.body);
+		collisionController.AddCollider(e.body);
 		entities.Add(e);
 
 		viewController.Show(e);
+	}
+
+	public void DestroyEntity(Entity e)
+	{
+		collisionController.RemoveCollider(e.body);
+		viewController.RecycleDelayed(e);
+		entities.Remove(e);
+	}
+
+	public void Reset()
+	{
+		foreach (var e in entities.ToList())
+		{
+			DestroyEntity(e);
+		}
 	}
 }

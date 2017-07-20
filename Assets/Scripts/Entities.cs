@@ -8,36 +8,30 @@ using Utils;
 
 public enum EntityType
 {
-    Asteroid,
-    Ufo,
-    Blast
+    Ufo = 0,
+    Asteroid = 1,
+    Blast = 2,
+    Placeholder = 3
 }
 
 public class Entity
 {
     public EntityType type;
     public FixedPointVector3 position;
+    public FixedPoint angle = 0;
     public FixedPoint scale = 1;
     public FixedPoint speed = 1;
 
-    public GameController owner;
-    public Body body;
-
-    public OnceEmptyStream deathEvent = new OnceEmptyStream();
-
     public FixedPointVector3 direction = new FixedPointVector3(0.01f, 0.01f, 0);
 
-    public virtual void DoLogics(FixedPoint dt)
-    {
-        position += direction * dt * speed;
-        body.position = position;
-    }
+    public int health = 20;
+
+    public Body body;
+    public EntityBehavior behavior;
 }
 
 public class Ufo : Entity
 {
-    public int health = 20;
-
     public FixedPoint asteroidDetectionRadius;
 
     public FixedPoint orbitRadius;
@@ -45,136 +39,93 @@ public class Ufo : Entity
     public FixedPoint currentOrbitAngle = 0;
 
     public FixedPointVector3 originPosition = new FixedPointVector3(0, 0 , 0);
-    public FixedPoint timeBetweenShots = 2;
+    public FixedPoint timeBetweenShots = FixedPoint.Float05;
 
-    public Ufo(FixedPointVector3 _pos, FixedPoint _diameter, GameController _owner)
+    public Ufo(FixedPointVector3 _pos, FixedPoint _diameter)
     {
-        owner = _owner;
-
         type = EntityType.Ufo;
 
         originPosition = _pos;
-        speed = (FixedPoint) 0.5f;
+        speed = Extensions.Range(0.5f, 1f);
         orbitRadius = scale;
         asteroidDetectionRadius = _diameter * 5;
 
-        body = new CircleBody(originPosition, _diameter * (FixedPoint)0.5f);
+        body = new CircleBody(originPosition, _diameter * (FixedPoint)0.5f, this);
 
-        body.layer = 0;
-        body.collidesWithLayers[1 << 1] = true;
-        body.owner = this;
-        
+        body.SetLayer(type);
+        body.SetCollidesWith(EntityType.Asteroid, true);
+        body.SetCollidesWith(EntityType.Blast, true);
+        body.SetCollidesWith(EntityType.Placeholder, true);
+
         //randomize rotations
         if (Random.value > 0.5f)
             orbitSpeedPerSecond = -orbitSpeedPerSecond;
 
         currentOrbitAngle = Extensions.Range(0, Mathf.PI * 2);
 
-        //destroy on collision with asteroid
-        var subscription = body.collisionStream.Listen(other => {
-            if (other.owner is Asteroid)
-                deathEvent.Send();
-        });
-
-        //stop reacting to collisions once object is destroyed
-        deathEvent.Listen(subscription.Dispose);
-    }
-
-    private FixedPoint _secondsSinceLastShot = 0;
-
-    public override void DoLogics(FixedPoint dt)
-    {
-        if (health < 1)
-        {
-            deathEvent.Send();
-            return;
-        }
-
-        if (_secondsSinceLastShot >= timeBetweenShots) {
-            Shoot();
-            _secondsSinceLastShot = 0;
-        } else
-            _secondsSinceLastShot += dt;
-
-        originPosition += direction * dt * speed;
-        currentOrbitAngle += orbitSpeedPerSecond * dt;
-
-        position = originPosition + new FixedPointVector3(currentOrbitAngle.Sin(), currentOrbitAngle.Cos(), 0) * orbitRadius;
-        body.position = position;
-    }
-
-    //do the pew pews
-    //i didn't bother with grid here 
-    //because it doesn't happen every frame and has low locality
-    private void Shoot()
-    {
-        var minDistance = (FixedPoint)999;
-        Entity closestEntity = null;
-
-        foreach (var other in owner.entities)
-        {
-            if (other == this)
-                continue;
-
-            bool closer = false;
-            var distance = (position - other.position).Magnitude;
-
-            if (other is Ufo)
-            {
-                closer = distance < minDistance;
-            }
-            else if (other is Asteroid)
-            {
-                closer = distance < minDistance && distance <= asteroidDetectionRadius;
-            }
-
-            if (closer)
-            {
-                minDistance = distance;
-                closestEntity = other;
-            }
-        }
+        behavior = new UfoBehavior(this);
     }
 }
 
 public class Asteroid : Entity
 {
-    public int health = 3;
-
-    public Asteroid(FixedPointVector3 _pos, FixedPoint _scale, GameController _owner)
+    public Asteroid(FixedPointVector3 _pos, FixedPoint _scale)
     {
-        owner = _owner;
-
         position = _pos;
         scale = _scale;
+        speed = Extensions.Range(1, 2);
 
-        body = new CircleBody(position, scale * (FixedPoint)0.5f);
+        type = EntityType.Asteroid;
 
-        body.layer = 1;
-        body.collidesWithLayers[0 << 1] = true;
-        body.collidesWithLayers[1 << 1] = true;
-        body.owner = this;
+        body = new CircleBody(position, scale * (FixedPoint)0.5f, this);
 
-        var subscription = body.collisionStream.Listen(other =>
-        {
-            if (other.owner is Asteroid)
-                direction = (body.position - other.position).Normalized;
-        });
+        body.SetLayer(type);
+        body.SetCollidesWith(EntityType.Ufo, true);
+        body.SetCollidesWith(EntityType.Asteroid, true);
+        body.SetCollidesWith(EntityType.Blast, true);
+        body.SetCollidesWith(EntityType.Placeholder, true);
 
-        deathEvent.Listen(subscription.Dispose);
+        behavior = new  AsteroidBehavior(this);
     }
 }
 
 public class Blast : Entity
 {
-    public Blast(FixedPointVector3 pos)
+    public Entity source;
+
+    public Blast(FixedPointVector3 pos, FixedPointVector3 dir, Entity _source)
     {
         position = pos;
-        body = new OrientedBoxBody(pos, 5, 10, 0);
+        direction = dir;
+        speed = Extensions.Range(2, 3);
+        angle = (FixedPoint)(Mathf.Atan2(-dir.X.Float, dir.Y.Float));
 
-        body.layer = 2;
-        body.collidesWithLayers[0] = true;
-        body.collidesWithLayers[1] = true;
-        body.owner = this;
+        type = EntityType.Blast;
+        body = new OrientedBoxBody(pos, (FixedPoint)0.15f, (FixedPoint)0.5f, -angle, this);
+        scale = (FixedPoint) 0.3f;
+
+        body.SetLayer(type);
+        body.SetCollidesWith(EntityType.Ufo, true);
+        body.SetCollidesWith(EntityType.Asteroid, true);
+
+        behavior = new BlastBehavior(this);
+
+        source = _source;
+    }
+}
+
+public class Placeholder : Entity
+{
+    public Placeholder(FixedPoint _scale)
+    {
+        scale = _scale;
+        type = EntityType.Placeholder;
+        body = new OrientedBoxBody(position, scale, scale, 0, this);
+
+        body.SetLayer(type);
+        body.SetCollidesWith(EntityType.Ufo, true);
+        body.SetCollidesWith(EntityType.Asteroid, true);
+
+        behavior = new PlaceholderBehavior(this);
     }
 }

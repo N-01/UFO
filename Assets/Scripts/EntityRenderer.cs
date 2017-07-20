@@ -23,13 +23,14 @@ public class EntityRenderer : MonoBehaviour {
         }
     }
 
-    public void UpdatePositions()
+    public void UpdateViews()
     {
         foreach (var view in activeViews) {
-            view.gameObject.transform.position = view.entity.position;
-            view.renderer.color = view.entity.body.IsColliding() ? Color.red : Color.white;
-            view.x = view.entity.body.occupiedTile.x;
-            view.y = view.entity.body.occupiedTile.y;
+            view.transform.position = view.entity.position;
+            view.transform.rotation = Quaternion.Euler(0, 0, view.entity.angle * Mathf.Rad2Deg);
+
+            if (view.entity is Placeholder)
+                view.sprite.color = (view.entity.behavior.IsColliding() ? Color.red : Color.white);
         }
     }
 
@@ -46,12 +47,11 @@ public class EntityRenderer : MonoBehaviour {
         }
 
         view.entity = entity;
-        view.transform.localScale = new Vector3(entity.scale, entity.scale, 0);
+        view.sprite.transform.localScale = new Vector3(entity.scale, entity.scale, 0);
+        view.animator.SetTrigger("idle");
 
         activeViews.Add(view);
         view.Activate();
-
-        entity.deathEvent.Listen(() => RecycleDelayed(view, 3));
 
         return view;
     }
@@ -59,20 +59,33 @@ public class EntityRenderer : MonoBehaviour {
     public void Recycle(EntityView view)
     {
         //much faster, than disabling GameObject
-        view.renderer.enabled = false;
+        view.sprite.enabled = false;
 
         activeViews.Remove(view);
         recycledViews.Add(view);
     }
 
-    public void RecycleDelayed(EntityView view, FixedPoint delay)
+    public void RecycleDelayed(Entity entity)
     {
-        StartCoroutine(DeathCoroutine(view, delay));
+        var target = activeViews.FirstOrDefault(v => v.entity == entity);
+        target.animator.SetTrigger("die");
+        StartCoroutine(DeathCoroutine(target, target.deathDelay));
     }
 
-    private IEnumerator DeathCoroutine(EntityView view, FixedPoint delay)
+    private IEnumerator DeathCoroutine(EntityView view, float delay)
     {
-        yield return new WaitForSeconds(1.0f);
+        yield return new WaitForSeconds(delay);
         Recycle(view);
+    }
+
+    public void Reset()
+    {
+        foreach (var v in activeViews)
+        {
+            DestroyObject(v);
+        }
+
+        activeViews.Clear();
+        recycledViews.Clear();
     }
 }

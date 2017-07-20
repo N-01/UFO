@@ -5,11 +5,12 @@ using UnityEngine;
 public class EntityView : MonoBehaviour
 {
     public Entity entity;
-    public SpriteRenderer renderer;
+    public SpriteRenderer sprite;
+    public Animator animator;
 
-    public int x, y;
+    public float deathDelay = 0;
 
     public void Activate() {
-        renderer.enabled = true;
+        sprite.enabled = true;
     }
 }

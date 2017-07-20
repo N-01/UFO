@@ -109,12 +109,39 @@ namespace Utils
         }
     }
 
-    public static class MathExt {
+    public static class MathExt
+    {
         public static T Clamp<T>(this T val, T min, T max) where T : IComparable<T>
         {
             if (val.CompareTo(min) < 0) return min;
             else if (val.CompareTo(max) > 0) return max;
             else return val;
+        }
+
+        public struct FPPoint
+        {
+            public FixedPoint x, y;
+
+            public FPPoint(FixedPoint _x, FixedPoint _y)
+            {
+                x = _x;
+                y = _y;
+            }
+        }
+
+        public static FixedPointVector3 RotatePoint(FixedPointVector3 p, FixedPointVector3 o, FixedPoint angle)
+        {
+            FixedPointVector3 r = new FixedPointVector3(p.X - o.X, p.Y - o.Y, 0);
+            FixedPoint s = angle.Sin();
+            FixedPoint c = angle.Cos();
+
+            r.X = r.X * c - r.Y * s;
+            r.Y = r.Y * c + r.X * s;
+
+            r.X += o.X;
+            r.Y += o.Y;
+
+            return r;
         }
     }
 

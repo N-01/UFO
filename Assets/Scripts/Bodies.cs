@@ -21,12 +21,14 @@ namespace Physics
 
     public class Connection
     {
-        public Body other;
+        public Body first;
+        public Body second;
         public bool confirmed;
 
-        public Connection(Body _other)
+        public Connection(Body _first, Body _second)
         {
-            other = _other;
+            first = _first;
+            second = _second;
             confirmed = true;
         }
     }
@@ -38,42 +40,19 @@ namespace Physics
 
         public int layer = 0; //number up to 32
         public BitVector32 collidesWithLayers;
-        public Stream<Body> collisionStream = new Stream<Body>();
 
-        private List<Connection> contacts = new List<Connection>(8);
         public Point occupiedTile;
 
         public Body(FixedPointVector3 pos) { position = pos; }
 
-        public bool AddContact(Body other)
+        public void SetLayer(EntityType t)
         {
-            var existing = contacts.FirstOrDefault(c => c.other == other);
-
-            if (existing != null) {
-                existing.confirmed = true;
-                return false;
-            }
-
-            collisionStream.Send(other);
-            contacts.Add(new Connection(other));
-            return true;
+            layer = (int) t;
         }
 
-        public void MakeContactsDirty()
+        public void SetCollidesWith(EntityType t, bool state)
         {
-            foreach (var c in contacts) {
-                c.confirmed = false;
-            }
-        }
-
-        public void CleanupContacts()
-        {
-            contacts.RemoveAll(c => c.confirmed == false);
-        }
-
-        public bool IsColliding()
-        {
-            return contacts.Count > 0;
+            collidesWithLayers[1 << (int)t] = state;
         }
 
         public bool CanCollideWith(Body other)
@@ -85,7 +64,12 @@ namespace Physics
     public class CircleBody : Body
     {
         public FixedPoint radius;
-        public CircleBody(FixedPointVector3 pos, FixedPoint r) : base(pos) { radius = r; }
+
+        public CircleBody(FixedPointVector3 pos, FixedPoint r, Entity _owner) : base(pos)
+        {
+            radius = r;
+            owner = _owner;
+        }
     }
 
     public class OrientedBoxBody : Body
@@ -93,11 +77,12 @@ namespace Physics
         public FixedPoint angle;
         public FixedPoint width, height;
 
-        public OrientedBoxBody(FixedPointVector3 pos, FixedPoint w, FixedPoint h, FixedPoint a) : base(pos)
+        public OrientedBoxBody(FixedPointVector3 pos, FixedPoint w, FixedPoint h, FixedPoint a, Entity _owner) : base(pos)
         {
             angle = a;
             width = w;
             height = h;
+            owner = _owner;
         }
     }
 }
