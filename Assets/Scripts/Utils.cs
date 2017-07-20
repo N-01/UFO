@@ -6,109 +6,6 @@ using UnityEngine;
 
 namespace Utils
 {
-    public class ActionDisposable : IDisposable
-    {
-        Action onDispose;
-
-        public ActionDisposable(Action act)
-        {
-            onDispose = act;
-        }
-
-        public void Dispose()
-        {
-            onDispose();
-        }
-    }
-
-    public interface IStream<T>
-    {
-        IDisposable Listen(Action<T> callback);
-    }
-
-    public class AnonymousStream<T> : IStream<T>
-    {
-        private readonly Func<Action<T>, IDisposable> _transformSubscription;
-
-        public AnonymousStream(Func<Action<T>, IDisposable> subscriber)
-        {
-            _transformSubscription = subscriber;
-        }
-
-        public IDisposable Listen(Action<T> act)
-        {
-            return _transformSubscription(act);
-        }
-    }
-
-    public class Stream<T> : IStream<T>
-    {
-        private List<Action<T>> _callbacks;
-
-        public IDisposable Listen(Action<T> callback)
-        {
-            if (_callbacks == null)
-                _callbacks = new List<Action<T>> {callback};
-            else
-                _callbacks.Add(callback);
-
-            //not using Remove directly to avoid removing callback during foreach
-            return new ActionDisposable(() => _callbacks[_callbacks.IndexOf(callback)] = null);
-        }
-
-        public void Send(T val)
-        {
-            if (_callbacks != null)
-            {
-                _callbacks.RemoveAll(c => c == null);
-
-                foreach (var c in _callbacks)
-                {
-                    c(val);
-                }
-            }
-        }
-
-    
-        public IStream<T2> Select<T2>(Func<T, T2> map)
-        {
-            return new AnonymousStream<T2>(action =>
-            {
-                return Listen(v => action(map(v)));
-            });
-        }
-    }
-
-    public class OnceEmptyStream
-    {
-        private List<Action> _callbacks;
-
-        public IDisposable Listen(Action callback)
-        {
-            if (_callbacks == null)
-                _callbacks = new List<Action> { callback };
-            else
-                _callbacks.Add(callback);
-
-            return new ActionDisposable(() => _callbacks[_callbacks.IndexOf(callback)] = null);
-        }
-
-        public void Send()
-        {
-            if (_callbacks != null)
-            {
-                _callbacks.RemoveAll(c => c == null);
-
-                foreach (var c in _callbacks)
-                {
-                    c();
-                }
-
-                _callbacks.Clear();
-            }
-        }
-    }
-
     public static class MathExt
     {
         public static T Clamp<T>(this T val, T min, T max) where T : IComparable<T>
@@ -116,17 +13,6 @@ namespace Utils
             if (val.CompareTo(min) < 0) return min;
             else if (val.CompareTo(max) > 0) return max;
             else return val;
-        }
-
-        public struct FPPoint
-        {
-            public FixedPoint x, y;
-
-            public FPPoint(FixedPoint _x, FixedPoint _y)
-            {
-                x = _x;
-                y = _y;
-            }
         }
 
         public static FixedPointVector3 RotatePoint(FixedPointVector3 p, FixedPointVector3 o, FixedPoint angle)
