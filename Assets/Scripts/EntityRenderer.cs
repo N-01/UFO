@@ -2,7 +2,6 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using Logic;
 using UnityEngine;
 
 //i considered just low-level rendering with just filling vbo/instancing
@@ -10,7 +9,7 @@ using UnityEngine;
 public class EntityRenderer : MonoBehaviour {
     private List<EntityView> activeViews = new List<EntityView>();
 
-    //pool to reuse gameobjects
+    //pool to reuse gameobjects from
     private List<EntityView> recycledViews = new List<EntityView>();
 
     public Dictionary<EntityType, EntityView> prefabs = new Dictionary<EntityType, EntityView>();

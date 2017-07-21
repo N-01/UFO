@@ -1,11 +1,6 @@
-﻿using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Collections.Specialized;
-using System.Linq;
+﻿using System.Collections.Generic;
 using Assets.Scripts.Logic.Math;
 using Logic;
-using UnityEngine;
 using Utils;
 
 namespace Physics
@@ -42,14 +37,14 @@ namespace Physics
 	{
 		List<Body> bodies = new List<Body>(32);
 
-		public int gridSize = 10;
+		public int gridSize = 12;
 		public int gridCapacity = 4;
 		public const int contactCapacity = 32;
 
 		private FixedPoint gridCellWidth, gridCellHeight;
 		private FixedPoint sceneWidth, sceneHeight, boundarySize;
 
-		Body[][][] colliderGrid;
+		private Body[][][] colliderGrid;
 
 		//use of struct and array are very ugly, but also fastest i could get
 		public Connection[] contacts = new Connection[contactCapacity];

@@ -1,8 +1,6 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using Logic;
-using UnityEngine;
 
 namespace Utils
 {
@@ -67,29 +65,6 @@ public static class Extensions
         }
 
         return false;
-    }
-
-    public static bool FreeSlot<T>(this T[] array, T value) where T : class
-    {
-        int index = array.IndexOf(value);
-        if (index != -1)
-        {
-            array[index] = null;
-            return true;
-        }
-
-        return false;
-    }
-
-    public static void FreeSlots<T>(this T[] array, Func<T, bool> pattern) where T : class
-    {
-        for (int i = 0; i < array.Length; i++)
-        {
-            if (pattern(array[i]))
-            {
-                array[i] = null;
-            }
-        }
     }
 
     public static void Clear<T>(this T[] array) where T : class

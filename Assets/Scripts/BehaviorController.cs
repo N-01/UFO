@@ -1,10 +1,5 @@
-﻿using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using Logic;
+﻿using Logic;
 using Physics;
-using UnityEngine;
 
 public class EntityBehavior
 {
@@ -136,10 +131,9 @@ public class BlastBehavior : EntityBehavior
 
 public class PlaceholderBehavior : EntityBehavior
 {
-	private Placeholder placeholder;
 	private int collisionCounter = 0;
 
-	public PlaceholderBehavior(Placeholder e) : base(e) { placeholder = e; }
+	public PlaceholderBehavior(Placeholder e) : base(e) { }
 
 	public override void EnterCollision(Entity other)
 	{
