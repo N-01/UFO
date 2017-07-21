@@ -12,5 +12,6 @@ public class EntityView : MonoBehaviour
 
     public void Activate() {
         sprite.enabled = true;
+        animator.SetTrigger("idle");
     }
 }

@@ -10,186 +10,234 @@ using Utils;
 
 namespace Physics
 {
-    public class CollisionProcessor
-    {
-        List<Body> bodies = new List<Body>(32);
+	public struct Point
+	{
+		public int x, y;
 
-        public int gridSize = 8;
-        public int gridCapacity = 8;
+		public Point(int _x, int _y)
+		{
+			x = _x;
+			y = _y;
+		}
+	}
 
-        private FixedPoint gridCellWidth, gridCellHeight;
-        private FixedPoint sceneWidth, sceneHeight, boundarySize;
+	public struct Connection
+	{
+		public Body first;
+		public Body second;
+		public bool confirmed;
 
-        Body[][][] colliderGrid;
+		public bool alive;
 
-        public List<Connection> contacts = new List<Connection>(32);
+		public Connection(Body _first, Body _second)
+		{
+			first = _first;
+			second = _second;
+			confirmed = true;
+			alive = true;
+		}
+	}
 
-        public GameController gameController;
-        public BehaviorController behaviorController;
+	public class CollisionProcessor
+	{
+		List<Body> bodies = new List<Body>(32);
 
-        public CollisionProcessor(int _gridSize, 
-                                  FixedPoint w, FixedPoint h, FixedPoint bounds,
-                                  BehaviorController bc, GameController gc)
-        {
-            gridSize = _gridSize;
+		public int gridSize = 10;
+		public int gridCapacity = 4;
+		public const int contactCapacity = 32;
 
-            sceneWidth = w;
-            sceneHeight = h;
+		private FixedPoint gridCellWidth, gridCellHeight;
+		private FixedPoint sceneWidth, sceneHeight, boundarySize;
 
-            boundarySize = bounds;
+		Body[][][] colliderGrid;
 
-            gridCellWidth  = w / (FixedPoint)_gridSize;
-            gridCellHeight = h / (FixedPoint)_gridSize;
+		//use of struct and array are very ugly, but also fastest i could get
+		public Connection[] contacts = new Connection[contactCapacity];
 
-            colliderGrid = new Body[gridSize][][];
+		public BehaviorController behaviorController;
 
-            for (int i = 0; i < _gridSize; i++)
-            {
-                colliderGrid[i] = new Body[gridSize][];
+		public CollisionProcessor(int _gridSize, 
+								  FixedPoint w, FixedPoint h, FixedPoint bounds,
+								  BehaviorController bc)
+		{
+			gridSize = _gridSize;
 
-                for (int j = 0; j < _gridSize; j++)
-                {
-                    colliderGrid[i][j] = new Body[gridCapacity];
-                }
-            }
+			sceneWidth = w;
+			sceneHeight = h;
 
-            behaviorController = bc;
-            gameController = gc;
-        }
+			boundarySize = bounds;
 
-        public void AddCollider(Body c)
-        {
-            bodies.Add(c);
-        }
+			gridCellWidth  = w / (FixedPoint)_gridSize;
+			gridCellHeight = h / (FixedPoint)_gridSize;
 
-        public void RemoveCollider<T>(T c) where T : Body
-        {
-            bodies.Remove(c);
-        }
+			colliderGrid = new Body[gridSize][][];
 
-        public Connection CreateContact(Body first, Body second)
-        {
-            var existing = contacts.FirstOrDefault(c => c.first == first && c.second == second);
+			for (int i = 0; i < _gridSize; i++)
+			{
+				colliderGrid[i] = new Body[gridSize][];
 
-            if (existing != null)
-            {
-                existing.confirmed = true;
-                return null;
-            }
+				for (int j = 0; j < _gridSize; j++)
+				{
+					colliderGrid[i][j] = new Body[gridCapacity];
+				}
+			}
 
-            var contact = new Connection(first, second);
-            contacts.Add(contact);
-            return contact;
-        }
+			behaviorController = bc;
+		}
 
-        public void UpdateCollisions()
-        {
-            //destroy objects otside of bounds
-            bodies.Where(b => (b.position.X < -boundarySize || b.position.X > sceneWidth + boundarySize ||
-                               b.position.Y < -boundarySize || b.position.Y > sceneHeight + boundarySize) && b.owner is Placeholder == false)
-                              .ToList()
-                              .ForEach(val => gameController.DestroyEntity(val.owner));
+		public void AddCollider(Body c)
+		{
+			bodies.Add(c);
+		}
 
-            //clean grid
-            for (int x = 0; x < gridSize; x++)
-            {
-                for (int y = 0; y < gridSize; y++)
-                {
-                    colliderGrid[x][y].Clear();
-                }
-            }
+		public void RemoveCollider<T>(T c) where T : Body
+		{
+			bodies.Remove(c);
+		}
 
-            //place objects into 2D grid
-            foreach (var body in bodies)
-            {
-                int tileX = Mathfp.Floor(body.position.X / gridCellWidth);
-                int tileY = Mathfp.Floor(body.position.Y / gridCellHeight);
+		public bool AddContact(Connection c)
+		{
+			for (int i = 0; i < contactCapacity; i++)
+			{
+				if (!contacts[i].alive)
+				{
+					contacts[i] = c;
+					return true;
+				}
+			}
+			return false;
+		}
 
-                body.occupiedTile = new Point(tileX, tileY);
+		public bool ContactConfirmExists(Body first, Body second)
+		{
+			for (int i = 0; i < contactCapacity; i++)
+			{
+				if (contacts[i].alive && contacts[i].first == first && contacts[i].second == second)
+				{
+					contacts[i].confirmed = true;
+					return true;
+				}
+			}
+			return false;
+		}
 
-                //inject into grid, including adjacent tiles
-                for (int x = tileX - 1; x <= tileX + 1; x++)
-                {
-                    for (int y = tileY - 1; y <= tileY + 1; y++)
-                    {
-                        if (x >= 0 && x < gridSize && y >= 0 && y < gridSize)
-                            colliderGrid[x][y].PutIntoFreeSlot(body);
-                    }
-                }
+		public void UpdateCollisions()
+		{
+			//destroy objects outside of bounds
+			foreach (var b in bodies)
+			{
+				if ((b.position.X < -boundarySize || b.position.X > sceneWidth + boundarySize ||
+					 b.position.Y < -boundarySize || b.position.Y > sceneHeight + boundarySize) &&
+					 b.owner is Placeholder == false)
+					 b.owner.dead = true;
+			}
 
-            }
+			//clean grid
+			for (int x = 0; x < gridSize; x++)
+			{
+				for (int y = 0; y < gridSize; y++)
+				{
+					colliderGrid[x][y].Clear();
+				}
+			}
 
-            //check collisions
-            foreach (var c in contacts) {
-                c.confirmed = false;
-            }
+			//place objects into 2D grid
+			foreach (var body in bodies)
+			{
+				int tileX = Mathfp.Floor(body.position.X / gridCellWidth);
+				int tileY = Mathfp.Floor(body.position.Y / gridCellHeight);
 
-            foreach (var body in bodies)
-            {
-                int x = body.occupiedTile.x;
-                int y = body.occupiedTile.y;
+				body.occupiedTile = new Point(tileX, tileY);
 
-                //ignore objects outside grid
-                if (!(x >= 0 && x < gridSize && y > 0 && y < gridSize))
-                    continue;
+				//inject into grid, including adjacent tiles
+				for (int x = tileX - 1; x <= tileX + 1; x++)
+				{
+					for (int y = tileY - 1; y <= tileY + 1; y++)
+					{
+						if (x >= 0 && x < gridSize && y >= 0 && y < gridSize)
+							colliderGrid[x][y].PutIntoFreeSlot(body);
+					}
+				}
 
-                foreach (var other in colliderGrid[x][y].Where(o => o != null))
-                {
-                    if (other != body)
-                    {
-                        if (body.CanCollideWith(other))
-                        {
-                            if (CheckCollision(body, other)) {
-                                behaviorController.SendCollisionEnter(CreateContact(body, other));
-                            }
-                        }
-                    }
-                }
-            }
+			}
 
-            foreach (var c in contacts.Where(c => !c.confirmed)) {
-                behaviorController.SendCollisionExit(c);
-            }
-            contacts.RemoveAll(c => !c.confirmed);
-        }
+			//check collisions
+			for (int i = 0; i < contactCapacity; i++)
+			{
+				contacts[i].confirmed = false;
+			}
 
-        public bool CheckCollision(Body first, Body second)
-        {
-            if (first is CircleBody && second is CircleBody)
-                return CircleVsCircle((CircleBody)first, (CircleBody)second);
-            if (first is OrientedBoxBody && second is CircleBody)
-                return OOBvsCircle((OrientedBoxBody)first, (CircleBody)second);
-            if (first is CircleBody && second is OrientedBoxBody)
-                return OOBvsCircle((OrientedBoxBody)second, (CircleBody)first);
+			foreach (var body in bodies)
+			{
+				int x = body.occupiedTile.x;
+				int y = body.occupiedTile.y;
+
+				//ignore objects outside grid
+				if (!(x >= 0 && x < gridSize && y > 0 && y < gridSize))
+					continue;
+
+				foreach (var other in colliderGrid[x][y])
+				{
+					if (other != null && other != body)
+					{
+						if (body.CanCollideWith(other) && PerformCollision(body, other) && !ContactConfirmExists(body, other))
+						{
+							var contact = new Connection(body, other);
+
+							if (AddContact(contact))
+								behaviorController.SendCollisionEnter(contact);
+						}
+					}
+				}
+			}
+
+			for (int i = 0; i < contactCapacity; i++)
+			{
+				if (contacts[i].alive && contacts[i].confirmed == false)
+				{
+					behaviorController.SendCollisionExit(contacts[i]);
+					contacts[i].alive = false;
+				}
+			}
+		}
+
+		public bool PerformCollision(Body first, Body second)
+		{
+			if (first is CircleBody && second is CircleBody)
+				return CircleVsCircle((CircleBody)first, (CircleBody)second);
+			if (first is OrientedBoxBody && second is CircleBody)
+				return OOBvsCircle((OrientedBoxBody)first, (CircleBody)second);
+			if (first is CircleBody && second is OrientedBoxBody)
+				return OOBvsCircle((OrientedBoxBody)second, (CircleBody)first);
 
 
-            return false;
-        }
+			return false;
+		}
 
-        //lets imagine lib provides FixedPointVector2
-        private bool CircleVsCircle(CircleBody first, CircleBody second)
-        {
-            FixedPoint rSum = (first.radius + second.radius);
-            return (first.position - second.position).Magnitude <= rSum * rSum;
-        }
+		//lets imagine lib provides FixedPointVector2
+		private bool CircleVsCircle(CircleBody first, CircleBody second)
+		{
+			FixedPoint rSum = (first.radius + second.radius);
+			return (first.position - second.position).Magnitude <= rSum * rSum;
+		}
 
-        private bool OOBvsCircle(OrientedBoxBody box, CircleBody circle)
-        {
-            FixedPointVector3 rotated = MathExt.RotatePoint(circle.position, box.position, 0);
-            FixedPointVector3 relative = rotated - box.position;
+		private bool OOBvsCircle(OrientedBoxBody box, CircleBody circle)
+		{
+			FixedPointVector3 rotated = MathExt.RotatePoint(circle.position, box.position, 0);
+			FixedPointVector3 relative = rotated - box.position;
 
-            FixedPoint halfW = box.width * FixedPoint.Float05;
-            FixedPoint halfH = box.height * FixedPoint.Float05;
-            FixedPointVector3 clamped = new FixedPointVector3(
-                                        relative.X.Clamp(-halfW, halfW),
-                                        relative.Y.Clamp(-halfH, halfH),
-                                        0);
+			FixedPoint halfW = box.width * FixedPoint.Float05;
+			FixedPoint halfH = box.height * FixedPoint.Float05;
+			FixedPointVector3 clamped = new FixedPointVector3(
+										relative.X.Clamp(-halfW, halfW),
+										relative.Y.Clamp(-halfH, halfH),
+										0);
 
-            //rotate back
-            FixedPointVector3 transformedBack = MathExt.RotatePoint(clamped, box.position, 0);
-            transformedBack += box.position;
+			//rotate back
+			FixedPointVector3 transformedBack = MathExt.RotatePoint(clamped, box.position, 0);
+			transformedBack += box.position;
 
-            return (circle.position - transformedBack).Magnitude <= circle.radius;
-        }
-    }
+			return (circle.position - transformedBack).Magnitude <= circle.radius;
+		}
+	}
 }

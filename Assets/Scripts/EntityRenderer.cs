@@ -29,8 +29,8 @@ public class EntityRenderer : MonoBehaviour {
             view.transform.position = view.entity.position;
             view.transform.rotation = Quaternion.Euler(0, 0, view.entity.angle * Mathf.Rad2Deg);
 
-            if (view.entity is Placeholder)
-                view.sprite.color = (view.entity.behavior.IsColliding() ? Color.red : Color.white);
+            if (view.entity.type == EntityType.Placeholder)
+                view.sprite.color = (view.entity.behavior.IsColliding() ? new Color(1, 0, 0, 0.4f) : new Color(1, 1, 1, 0.4f));
         }
     }
 
@@ -48,7 +48,6 @@ public class EntityRenderer : MonoBehaviour {
 
         view.entity = entity;
         view.sprite.transform.localScale = new Vector3(entity.scale, entity.scale, 0);
-        view.animator.SetTrigger("idle");
 
         activeViews.Add(view);
         view.Activate();
@@ -58,7 +57,7 @@ public class EntityRenderer : MonoBehaviour {
 
     public void Recycle(EntityView view)
     {
-        //much faster, than disabling GameObject
+        //much faster, than disabling whole GameObject
         view.sprite.enabled = false;
 
         activeViews.Remove(view);

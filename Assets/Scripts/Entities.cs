@@ -28,6 +28,8 @@ public class Entity
 
     public Body body;
     public EntityBehavior behavior;
+
+    public bool dead = false;
 }
 
 public class Ufo : Entity
