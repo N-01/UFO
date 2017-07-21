@@ -58,7 +58,7 @@ public class GameController : MonoBehaviour
 		var v3 = Camera.main.ScreenToWorldPoint(Input.mousePosition);
 		mouseTarget.position = new FixedPointVector3(v3.x, v3.y, 0);
 
-		if (Input.GetMouseButtonUp(0) &&  timeSinceUfoSpawned > ufoSpawnInterval)
+		if (Input.GetMouseButtonUp(0) && mouseTarget.behavior.IsColliding() == false &&  timeSinceUfoSpawned > ufoSpawnInterval)
 		{
 			SpawnUfo(mouseTarget.position);
 			timeSinceUfoSpawned = 0;
