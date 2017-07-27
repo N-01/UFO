@@ -27,7 +27,9 @@ public class Entity
 	public Body body;
 	public EntityBehavior behavior;
 
-	public bool dead = false;
+	public bool dead {
+		get { return health < 1; }
+	}
 }
 
 public class Ufo : Entity
@@ -37,6 +39,9 @@ public class Ufo : Entity
 	public FixedPoint orbitRadius;
 	public FixedPoint orbitSpeedPerSecond = (FixedPoint) Mathf.PI * 2;
 	public FixedPoint currentOrbitAngle = 0;
+
+    public FixedPointVector3 currentOrbitedPosition;
+	public FixedPointVector3 pushDirection;
 
 	public FixedPointVector3 originPosition;
 	public FixedPoint timeBetweenShots = FixedPoint.Float05;
@@ -58,6 +63,7 @@ public class Ufo : Entity
 		body.SetCollidesWith(EntityType.Asteroid, true);
 		body.SetCollidesWith(EntityType.Blast, true);
 		body.SetCollidesWith(EntityType.Placeholder, true);
+		body.SetCollidesWith(EntityType.Ufo, true);
 
 		//randomize rotations
 		if (Random.value > 0.5f)

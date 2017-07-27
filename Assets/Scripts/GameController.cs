@@ -33,7 +33,7 @@ public class GameController : MonoBehaviour
 	public void Start()
 	{
 		behaviorController = new BehaviorController(this);
-		collisionController = new CollisionProcessor(8, sceneWidth, sceneHeight, boundarySize, behaviorController);
+		collisionController = new CollisionProcessor(10, sceneWidth, sceneHeight, boundarySize, behaviorController);
 
 		mouseTarget = new Placeholder(2);
 		MaterializeEntity(mouseTarget);
@@ -136,32 +136,34 @@ public class GameController : MonoBehaviour
 
 	public void BringOutTheDead()
 	{
-		//clean dead entities in single pass without linq or extra alloc
-		if (entities.Count > 0)
+		int toRemove = 0;
+
+		//swap entities so dead ones are at the end
+		int backWardsIndex = entities.Count - 1;
+		for (int forwardIndex = 0; forwardIndex < backWardsIndex; forwardIndex++)
 		{
-			int lastAlive = entities.Count;
-			for (int b = 0; b < lastAlive; b++)
+			if (!entities[forwardIndex].dead)
+				continue;
+
+			DestroyEntity(entities[forwardIndex]);
+			toRemove++;
+
+			while (entities[backWardsIndex].dead)
 			{
-				if (entities[b].dead || entities[b].health < 1)
-				{
-					DestroyEntity(entities[b]);
+				DestroyEntity(entities[backWardsIndex]);
+				toRemove++;
+				backWardsIndex--;
 
-					for (int e = lastAlive - 1; e >= b; e--)
-					{
-						lastAlive = e;
-
-						if (!entities[e].dead)
-						{
-							entities.Swap(b, e);
-							break;
-						}
-					}
-				}
+				if (backWardsIndex == forwardIndex) goto finish;
 			}
 
-			if (lastAlive < entities.Count)
-				entities.RemoveRange(lastAlive, entities.Count - lastAlive);
+			entities.Swap(forwardIndex, backWardsIndex);
+			backWardsIndex--;
 		}
+
+		finish:
+		if (toRemove > 0)
+			entities.RemoveRange(entities.Count - toRemove, toRemove);
 	}
 
 	public void DestroyEntity(Entity e)

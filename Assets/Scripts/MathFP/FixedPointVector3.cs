@@ -215,6 +215,11 @@ namespace Logic{
 		}
 
 
+	    public static FixedPointVector3 Lerp(FixedPointVector3 first, FixedPointVector3 second, FixedPoint amount)
+	    {
+	        return first + (second - first) * amount;
+	    }
+
 		#region cast operator overloading
 
 		public static implicit operator FixedPointVector3(Vector2 v) { return new FixedPointVector3(v.x, v.y, 0); }

@@ -58,6 +58,7 @@ public class EntityRenderer : MonoBehaviour {
     {
         //much faster, than disabling whole GameObject
         view.sprite.enabled = false;
+        view.animator.enabled = false;
 
         activeViews.Remove(view);
         recycledViews.Add(view);

@@ -37,8 +37,8 @@ namespace Physics
 	{
 		List<Body> bodies = new List<Body>(32);
 
-		public int gridSize = 12;
-		public int gridCapacity = 4;
+		public int gridSize;
+		public int gridCapacity = 6;
 		public const int contactCapacity = 32;
 
 		private FixedPoint gridCellWidth, gridCellHeight;
@@ -103,28 +103,27 @@ namespace Physics
 			return false;
 		}
 
-		public bool ContactConfirmExists(Body first, Body second)
+		public int FindExistingContact(Body first, Body second)
 		{
 			for (int i = 0; i < contactCapacity; i++)
 			{
 				if (contacts[i].alive && contacts[i].first == first && contacts[i].second == second)
 				{
-					contacts[i].confirmed = true;
-					return true;
+					return i;
 				}
 			}
-			return false;
+			return -1;
 		}
 
 		public void UpdateCollisions()
 		{
-			//destroy objects outside of bounds
 			foreach (var b in bodies)
 			{
-				if ((b.position.X < -boundarySize || b.position.X > sceneWidth + boundarySize ||
+			    //destroy objects outside of bounds
+                if ((b.position.X < -boundarySize || b.position.X > sceneWidth + boundarySize ||
 					 b.position.Y < -boundarySize || b.position.Y > sceneHeight + boundarySize) &&
 					 b.owner is Placeholder == false)
-					 b.owner.dead = true;
+					 b.owner.health = 0;
 			}
 
 			//clean grid
@@ -175,12 +174,20 @@ namespace Physics
 				{
 					if (other != null && other != body)
 					{
-						if (body.CanCollideWith(other) && PerformCollision(body, other) && !ContactConfirmExists(body, other))
+						if (body.CanCollideWith(other) && PerformCollision(body, other))
 						{
-							var contact = new Connection(body, other);
-
-							if (AddContact(contact))
-								behaviorController.SendCollisionEnter(contact);
+						    int existing = FindExistingContact(body, other);
+						    if (existing == -1)
+						    {
+						        var contact = new Connection(body, other);
+                                if (AddContact(contact))
+						            behaviorController.SendCollisionEnter(contact);
+						    }
+						    else
+						    {
+						        behaviorController.SendCollisionContinue(contacts[existing]);
+						        contacts[existing].confirmed = true;
+						    }
 						}
 					}
 				}
